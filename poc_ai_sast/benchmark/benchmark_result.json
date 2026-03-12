@@ -17,8 +17,8 @@
     "fp_reduction_rate": 100.0
   },
   "timing": {
-    "total_seconds": 1.06,
-    "per_file_seconds": 0.18
+    "total_seconds": 0.91,
+    "per_file_seconds": 0.15
   },
   "success_criteria": {
     "precision_70": true,

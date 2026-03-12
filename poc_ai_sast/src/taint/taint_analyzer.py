@@ -15,21 +15,21 @@ SOURCE_PATTERNS = [
 
 SANITIZER_PATTERNS = {
     "sql_injection": [
-        r'prepareStatement\s*\(',
-        r'PreparedStatement',
-        r'"[^"]*\?[^"]*"',
-        r"'[^']*\?[^']*'",
+        (r'prepareStatement\s*\(', "prepareStatement()"),
+        (r'PreparedStatement', "PreparedStatement"),
+        (r'"[^"]*\?[^"]*"', "파라미터 바인딩(?)"),
+        (r"'[^']*\?[^']*'", "파라미터 바인딩(?)"),
     ],
     "xss": [
-        r'HtmlUtils\.htmlEscape\s*\(',
-        r'htmlEscape\s*\(',
-        r'escapeHtml\s*\(',
-        r'StringEscapeUtils\.escapeHtml',
+        (r'HtmlUtils\.htmlEscape\s*\(', "HtmlUtils.htmlEscape()"),
+        (r'htmlEscape\s*\(', "htmlEscape()"),
+        (r'escapeHtml\s*\(', "escapeHtml()"),
+        (r'StringEscapeUtils\.escapeHtml', "StringEscapeUtils.escapeHtml()"),
     ],
     "path_traversal": [
-        r'FilenameUtils\.getName\s*\(',
-        r'\.normalize\s*\(\s*\)',
-        r'getCanonicalPath\s*\(',
+        (r'FilenameUtils\.getName\s*\(', "FilenameUtils.getName()"),
+        (r'\.normalize\s*\(\s*\)', "Path.normalize()"),
+        (r'getCanonicalPath\s*\(', "getCanonicalPath()"),
     ],
 }
 
@@ -54,9 +54,9 @@ def _check_source(code: str) -> bool:
 
 def _check_sanitizer(code: str, vuln_type: str) -> tuple:
     patterns = SANITIZER_PATTERNS.get(vuln_type, [])
-    for pattern in patterns:
+    for pattern, display_name in patterns:
         if re.search(pattern, code):
-            return True, pattern
+            return True, display_name
     return False, None
 
 def _build_taint_path(code: str, finding: SemgrepFinding) -> List[str]:
@@ -110,6 +110,29 @@ def analyze_taint(
 
     fix_suggestion = FIX_SUGGESTIONS.get(finding.vulnerability_type, "")
 
+    # --use-llm 플래그 시 항상 LLM으로 최종 판정 (regex는 참고 정보만 제공)
+    if use_llm:
+        llm_result = analyze_with_llm(
+            snippet, finding.vulnerability_type,
+            finding.message, finding.rule_id,
+            use_mock=False,
+            source_detected=source_detected,
+            sanitizer_type=sanitizer_type,
+        )
+        return TaintAnalysisResult(
+            finding=finding,
+            verdict=llm_result.verdict,
+            confidence=llm_result.confidence,
+            source_detected=source_detected or llm_result.source_detected,
+            sanitizer_detected=sanitizer_detected or llm_result.sanitizer_detected,
+            sanitizer_type=sanitizer_type or llm_result.sanitizer_type,
+            taint_path=taint_path,
+            reasoning=llm_result.reasoning,
+            llm_assisted=True,
+            fix_suggestion=llm_result.fix_suggestion,
+        )
+
+    # LLM 미사용 시 regex 기반 판정
     # LLM 위임 조건: 200줄 이상이거나 소스 추적 불가
     needs_llm = (len(lines) > 200) or (not source_detected and not sanitizer_detected)
 
@@ -128,43 +151,24 @@ def analyze_taint(
         )
 
     if source_detected and not sanitizer_detected and not needs_llm:
-        if use_llm or use_mock:
-            llm_result = analyze_with_llm(
-                snippet, finding.vulnerability_type,
-                finding.message, finding.rule_id,
-                use_mock=use_mock
-            )
-            return TaintAnalysisResult(
-                finding=finding,
-                verdict=llm_result.verdict,
-                confidence=llm_result.confidence,
-                source_detected=source_detected,
-                sanitizer_detected=llm_result.sanitizer_detected,
-                sanitizer_type=llm_result.sanitizer_type,
-                taint_path=taint_path,
-                reasoning=llm_result.reasoning,
-                llm_assisted=True,
-                fix_suggestion=llm_result.fix_suggestion,
-            )
-        else:
-            return TaintAnalysisResult(
-                finding=finding,
-                verdict="CONFIRMED",
-                confidence=0.80,
-                source_detected=True,
-                sanitizer_detected=False,
-                sanitizer_type=None,
-                taint_path=taint_path,
-                reasoning=f"사용자 입력(Source)이 Sanitizer 없이 {finding.vulnerability_type.replace('_', ' ')} Sink에 도달합니다.",
-                llm_assisted=False,
-                fix_suggestion=fix_suggestion,
-            )
+        return TaintAnalysisResult(
+            finding=finding,
+            verdict="CONFIRMED",
+            confidence=0.80,
+            source_detected=True,
+            sanitizer_detected=False,
+            sanitizer_type=None,
+            taint_path=taint_path,
+            reasoning=f"사용자 입력(Source)이 Sanitizer 없이 {finding.vulnerability_type.replace('_', ' ')} Sink에 도달합니다.",
+            llm_assisted=False,
+            fix_suggestion=fix_suggestion,
+        )
 
-    # LLM에 위임
+    # mock으로 위임
     llm_result = analyze_with_llm(
         snippet, finding.vulnerability_type,
         finding.message, finding.rule_id,
-        use_mock=use_mock
+        use_mock=True
     )
     return TaintAnalysisResult(
         finding=finding,
@@ -175,6 +179,6 @@ def analyze_taint(
         sanitizer_type=llm_result.sanitizer_type,
         taint_path=taint_path,
         reasoning=llm_result.reasoning,
-        llm_assisted=True,
+        llm_assisted=False,
         fix_suggestion=llm_result.fix_suggestion,
     )

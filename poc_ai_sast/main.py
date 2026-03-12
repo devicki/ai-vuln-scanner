@@ -233,10 +233,17 @@ Examples:
     elif args.serve:
         serve(args.port)
     elif args.source_dir:
+        if args.use_llm:
+            import logging
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+            )
         scan(
             source_dir=args.source_dir,
             vuln_types=args.types,
             use_llm=args.use_llm,
+            use_mock=not args.use_llm,
             html_report=args.html_report,
         )
     else:

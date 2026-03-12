@@ -1,25 +1,25 @@
 {
   "source_dir": "tests/sample_code/safe",
-  "analyzed_at": "2026-03-11T17:53:34.392640",
+  "analyzed_at": "2026-03-12T17:01:25.907629",
   "total_files": 3,
   "semgrep_findings_count": 2,
-  "confirmed_count": 0,
-  "false_positive_count": 2,
+  "confirmed_count": 2,
+  "false_positive_count": 0,
   "uncertain_count": 0,
   "findings": [
     {
-      "verdict": "FALSE_POSITIVE",
+      "verdict": "CONFIRMED",
       "confidence": 0.9,
       "source_detected": true,
       "sanitizer_detected": true,
-      "sanitizer_type": "HtmlUtils\\.htmlEscape\\s*\\(",
+      "sanitizer_type": "HtmlUtils.htmlEscape()",
       "taint_path": [
         "line 15: public void showComment(@RequestParam String comment, HttpServletResponse respon [SOURCE]",
         "line 17: String escaped = HtmlUtils.htmlEscape(comment);",
         "line 18: writer.write(\"<div>\" + escaped + \"</div>\"); [SINK]"
       ],
-      "reasoning": "코드에서 HtmlUtils\\.htmlEscape\\s*\\( Sanitizer가 감지되었습니다. xss 공격이 방지되어 있습니다.",
-      "llm_assisted": false,
+      "reasoning": "The user-controlled input 'comment' is directly passed to the response without any sanitization or validation, which is a direct violation of the rule. Although HtmlUtils.htmlEscape() is used as a sanitizer, it is applied to the same variable that is written to the response, which means it is not effectively mitigating the risk of XSS. Therefore, this is a confirmed XSS vulnerability.",
+      "llm_assisted": true,
       "finding": {
         "rule_id": "rules.java-xss-response-write",
         "file_path": "tests/sample_code/safe/SafeCommentController.java",
@@ -34,18 +34,18 @@
       "fix_suggestion": "HtmlUtils.htmlEscape() 또는 Thymeleaf th:text 사용하여 출력 이스케이프 처리"
     },
     {
-      "verdict": "FALSE_POSITIVE",
+      "verdict": "CONFIRMED",
       "confidence": 0.9,
       "source_detected": true,
       "sanitizer_detected": true,
-      "sanitizer_type": "FilenameUtils\\.getName\\s*\\(",
+      "sanitizer_type": "FilenameUtils.getName()",
       "taint_path": [
         "line 18: public ResponseEntity<byte[]> getFile(@RequestParam String filename) throws IOEx [SOURCE]",
         "line 19: String safeFilename = FilenameUtils.getName(filename);",
         "line 20: File file = new File(BASE_DIR + safeFilename); [SINK]"
       ],
-      "reasoning": "코드에서 FilenameUtils\\.getName\\s*\\( Sanitizer가 감지되었습니다. path traversal 공격이 방지되어 있습니다.",
-      "llm_assisted": false,
+      "reasoning": "The user-controlled input 'filename' is directly used to construct a file path without any sanitization or validation, which can lead to a path traversal vulnerability. The use of FilenameUtils.getName() to extract the filename from the user input does not mitigate the risk, as the entire input is still used to form the file path. This makes the code susceptible to path traversal attacks.",
+      "llm_assisted": true,
       "finding": {
         "rule_id": "rules.java-path-traversal-file-new",
         "file_path": "tests/sample_code/safe/SafeFileController.java",
@@ -61,8 +61,8 @@
     }
   ],
   "metrics": {
-    "precision_estimate": 0.0,
-    "recall_estimate": 0.0,
-    "fp_reduction_rate": 100.0
+    "precision_estimate": 1.0,
+    "recall_estimate": 1.0,
+    "fp_reduction_rate": 0.0
   }
 }

@@ -46,7 +46,10 @@ python3 main.py --source-dir tests/sample_projects/reachable --all-cves
 # LLM 보조 분석 (Ollama 필요)
 export LLM_BASE_URL=http://localhost:11434/v1
 export LLM_MODEL=codellama
+OLLAMA_HOST=0.0.0.0 ollama serve
+
 python3 main.py --source-dir tests/sample_projects/reachable --all-cves --use-llm
+python3 main.py --source-dir tests/sample_projects/unreachable/ --all-cves --use-llm
 
 # JSON 출력
 python3 main.py --source-dir tests/sample_projects/reachable --json

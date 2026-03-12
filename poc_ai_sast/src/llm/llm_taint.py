@@ -1,8 +1,11 @@
 import os
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Optional, Literal
+
+logger = logging.getLogger(__name__)
 
 FIX_SUGGESTIONS = {
     "sql_injection": "PreparedStatement 또는 JdbcTemplate 파라미터 바인딩 사용: jdbcTemplate.queryForList(\"SELECT * FROM users WHERE id = ?\", userId)",
@@ -88,75 +91,194 @@ def analyze_with_llm(
     vulnerability_type: str,
     semgrep_message: str,
     rule_id: str,
-    use_mock: bool = True
+    use_mock: bool = True,
+    source_detected: bool = False,
+    sanitizer_type: Optional[str] = None,
 ) -> LLMVerdict:
-    """LLM Taint Analysis - Mock 또는 실제 LLM 사용"""
+    """LLM Taint Analysis - Mock 또는 실제 LLM 사용
 
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    llm_base_url = os.environ.get("LLM_BASE_URL")
-
-    if not use_mock and openai_key:
-        return _call_openai(code_snippet, vulnerability_type, semgrep_message, rule_id, openai_key)
-    elif not use_mock and llm_base_url:
-        return _call_ollama(code_snippet, vulnerability_type, semgrep_message, rule_id, llm_base_url)
-    else:
+    LLM_PROVIDER 환경변수로 프로바이더 선택:
+      claude  → Anthropic Claude API (ANTHROPIC_API_KEY 필요)
+      openai  → OpenAI API           (OPENAI_API_KEY 필요)
+      ollama  → Ollama 로컬 서버     (LLM_BASE_URL 필요)
+    """
+    if use_mock:
         return _mock_analyze(code_snippet, vulnerability_type, semgrep_message, rule_id)
 
-def _call_openai(code_snippet, vulnerability_type, semgrep_message, rule_id, api_key) -> LLMVerdict:
+    provider = os.environ.get("LLM_PROVIDER", "").lower()
+
+    # 프로바이더 명시 지정
+    if provider == "claude":
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            return _call_claude(code_snippet, vulnerability_type, semgrep_message, rule_id, api_key, source_detected, sanitizer_type)
+        print("WARNING: LLM_PROVIDER=claude 이지만 ANTHROPIC_API_KEY 미설정. Mock 모드로 폴백")
+
+    elif provider == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            return _call_openai(code_snippet, vulnerability_type, semgrep_message, rule_id, api_key, source_detected, sanitizer_type)
+        print("WARNING: LLM_PROVIDER=openai 이지만 OPENAI_API_KEY 미설정. Mock 모드로 폴백")
+
+    elif provider == "ollama":
+        base_url = os.environ.get("LLM_BASE_URL")
+        if base_url:
+            return _call_ollama(code_snippet, vulnerability_type, semgrep_message, rule_id, base_url, source_detected, sanitizer_type)
+        print("WARNING: LLM_PROVIDER=ollama 이지만 LLM_BASE_URL 미설정. Mock 모드로 폴백")
+
+    else:
+        # LLM_PROVIDER 미설정 시 키 존재 여부로 자동 감지
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("LLM_BASE_URL")
+
+        if anthropic_key:
+            return _call_claude(code_snippet, vulnerability_type, semgrep_message, rule_id, anthropic_key, source_detected, sanitizer_type)
+        elif openai_key:
+            return _call_openai(code_snippet, vulnerability_type, semgrep_message, rule_id, openai_key, source_detected, sanitizer_type)
+        elif base_url:
+            return _call_ollama(code_snippet, vulnerability_type, semgrep_message, rule_id, base_url, source_detected, sanitizer_type)
+
+    return _mock_analyze(code_snippet, vulnerability_type, semgrep_message, rule_id)
+
+def _call_claude(code_snippet, vulnerability_type, semgrep_message, rule_id, api_key, source_detected, sanitizer_type) -> LLMVerdict:
+    try:
+        import anthropic
+        claude_model = os.environ.get("CLAUDE_MODEL", "claude-opus-4-6")
+        client = anthropic.Anthropic(api_key=api_key)
+        prompt = _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id, source_detected, sanitizer_type)
+        logger.debug("[Claude:%s] prompt INPUT >>>>\n%s\n<<<<", claude_model, prompt)
+        with client.messages.stream(
+            model=claude_model,
+            max_tokens=1024,
+            thinking={"type": "adaptive"},
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            response = stream.get_final_message()
+        # text 블록만 추출 (thinking 블록 제외)
+        output = next((b.text for b in response.content if b.type == "text"), "")
+        logger.debug("[Claude:%s] prompt OUTPUT >>>>\n%s\n<<<<", claude_model, output)
+        return _parse_llm_response(output, vulnerability_type)
+    except Exception as e:
+        print(f"WARNING: Claude API 호출 실패: {e}. Mock 모드로 폴백")
+        return _mock_analyze(code_snippet, vulnerability_type, semgrep_message, rule_id)
+
+def _call_openai(code_snippet, vulnerability_type, semgrep_message, rule_id, api_key, source_detected, sanitizer_type) -> LLMVerdict:
     try:
         import openai
-        client = openai.OpenAI(api_key=api_key)
-        prompt = _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id)
+        client = openai.OpenAI(api_key=api_key, timeout=300.0)
+        prompt = _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id, source_detected, sanitizer_type)
+        logger.debug("[OpenAI] prompt INPUT >>>>\n%s\n<<<<", prompt)
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
-        return _parse_llm_response(response.choices[0].message.content, vulnerability_type)
+        output = response.choices[0].message.content
+        logger.debug("[OpenAI] prompt OUTPUT >>>>\n%s\n<<<<", output)
+        return _parse_llm_response(output, vulnerability_type)
     except Exception as e:
         print(f"WARNING: OpenAI API 호출 실패: {e}. Mock 모드로 폴백")
         return _mock_analyze(code_snippet, vulnerability_type, semgrep_message, rule_id)
 
-def _call_ollama(code_snippet, vulnerability_type, semgrep_message, rule_id, base_url) -> LLMVerdict:
+def _call_ollama(code_snippet, vulnerability_type, semgrep_message, rule_id, base_url, source_detected, sanitizer_type) -> LLMVerdict:
     try:
         import openai
         llm_model = os.environ.get("LLM_MODEL", "deepseek-coder")
-        client = openai.OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
-        prompt = _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id)
+        # base_url already contains the full path (e.g. http://host:11434/v1)
+        client = openai.OpenAI(base_url=base_url, api_key="ollama", timeout=300.0)
+        prompt = _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id, source_detected, sanitizer_type)
+        logger.debug("[Ollama:%s] prompt INPUT >>>>\n%s\n<<<<", llm_model, prompt)
         response = client.chat.completions.create(
             model=llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
-        return _parse_llm_response(response.choices[0].message.content, vulnerability_type)
+        output = response.choices[0].message.content
+        logger.debug("[Ollama:%s] prompt OUTPUT >>>>\n%s\n<<<<", llm_model, output)
+        return _parse_llm_response(output, vulnerability_type)
     except Exception as e:
         print(f"WARNING: Ollama API 호출 실패: {e}. Mock 모드로 폴백")
         return _mock_analyze(code_snippet, vulnerability_type, semgrep_message, rule_id)
 
-def _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id) -> str:
-    return f"""당신은 Java 소스코드 보안 전문가입니다. 다음 코드가 실제 {vulnerability_type} 취약점인지 분석하세요.
+def _build_prompt(code_snippet, vulnerability_type, semgrep_message, rule_id,
+                  source_detected: bool = False, sanitizer_type: Optional[str] = None) -> str:
+    # ---------------------------------------------------------------------------
+    # [이전 한국어 프롬프트 — 참고용]
+    #
+    # """당신은 Java 소스코드 보안 전문가입니다. 다음 코드가 실제 {vulnerability_type} 취약점인지 분석하세요.
+    #
+    # Semgrep이 탐지한 잠재적 취약점:
+    # - 규칙: {rule_id}
+    # - 메시지: {semgrep_message}
+    #
+    # 정적 분석 사전 결과 (참고용):
+    # - Source 탐지: {source_info}
+    # - Sanitizer 탐지: {sanitizer_info}
+    #
+    # ※ 위 사전 결과는 단순 패턴 매칭 결과입니다. 실제 코드 흐름을 직접 분석하여 최종 판정하세요.
+    #
+    # 취약 코드:
+    # ```java
+    # {code_snippet}
+    # ```
+    #
+    # 분석 요청:
+    # 1. 사용자 입력(Source)이 실제로 이 코드에 도달하는가?
+    # 2. Source에서 위험한 연산(Sink)까지 경로에 Sanitizer(검증/이스케이프)가 존재하는가?
+    # 3. Sanitizer가 있다면 올바르게 적용되었는가? (같은 변수에 적용되었는지 확인)
+    # 4. 이것이 실제 취약점(True Positive)인가, 오탐(False Positive)인가?
+    #
+    # 다음 JSON 형식으로만 답변하세요:
+    # {
+    #   "verdict": "CONFIRMED|FALSE_POSITIVE|UNCERTAIN",
+    #   "confidence": 0.0~1.0,
+    #   "source_detected": true|false,
+    #   "sanitizer_detected": true|false,
+    #   "sanitizer_type": "설명 또는 null",
+    #   "reasoning": "한국어로 판정 근거 2~3문장"
+    # }
+    # """
+    # ---------------------------------------------------------------------------
 
-Semgrep이 탐지한 잠재적 취약점:
-- 규칙: {rule_id}
-- 메시지: {semgrep_message}
-- 취약 코드:
+    # 소스 탐지 여부 문자열 (영문)
+    source_info = "Detected (user-controlled input flows into the code)" if source_detected else "Not detected"
+    # Sanitizer 탐지 여부 문자열 (영문)
+    sanitizer_info = f"Detected - {sanitizer_type}" if sanitizer_type else "Not detected"
+
+    # 취약점 유형을 읽기 좋은 형태로 변환 (e.g. sql_injection → SQL Injection)
+    vuln_display = vulnerability_type.replace("_", " ").title()
+
+    return f"""You are a Java application security expert. Analyze whether the following code contains a real {vuln_display} vulnerability.
+
+## Semgrep Finding
+- Rule   : {rule_id}
+- Message: {semgrep_message}
+
+## Static Analysis Pre-results (pattern-matching hints — verify manually)
+- Source   : {source_info}
+- Sanitizer: {sanitizer_info}
+
+## Code Under Review
 ```java
 {code_snippet}
 ```
 
-분석 요청:
-1. 사용자 입력(Source)이 실제로 이 코드에 도달하는가?
-2. Source에서 위험한 연산(Sink)까지 경로에 Sanitizer(검증/이스케이프)가 존재하는가?
-3. 이것이 실제 취약점(True Positive)인가, 오탐(False Positive)인가?
+## Analysis Tasks
+1. Does user-controlled input (Source) actually reach this code?
+2. Is there a sanitizer or validator on the path from Source to the dangerous operation (Sink)?
+3. If a sanitizer exists, is it correctly applied to the SAME variable that reaches the Sink?
+4. Final verdict: is this a True Positive (real vulnerability) or a False Positive?
 
-다음 JSON 형식으로만 답변하세요:
+## Response Format
+Reply with ONLY a JSON object — no markdown fences, no extra text:
 {{
   "verdict": "CONFIRMED|FALSE_POSITIVE|UNCERTAIN",
-  "confidence": 0.0~1.0,
-  "source_detected": true|false,
-  "sanitizer_detected": true|false,
-  "sanitizer_type": "설명 또는 null",
-  "reasoning": "한국어로 판정 근거 2~3문장"
+  "confidence": <float 0.0-1.0>,
+  "source_detected": <true|false>,
+  "sanitizer_detected": <true|false>,
+  "sanitizer_type": "<name or null>",
+  "reasoning": "<2-3 sentences in Korean explaining the decision>"
 }}"""
 
 def _parse_llm_response(response_text: str, vulnerability_type: str) -> LLMVerdict:
