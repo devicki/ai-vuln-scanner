@@ -1,0 +1,19 @@
+rules:
+  - id: java-path-traversal-file-new
+    pattern: |
+      new File($BASE + $INPUT);
+    message: "잠재적 Path Traversal: 사용자 입력으로 파일 경로 직접 구성 (CWE-22)"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-22"
+      owasp: "A01:2021 - Broken Access Control"
+
+  - id: java-path-traversal-paths-get
+    pattern: |
+      Paths.get($BASE, $INPUT);
+    message: "잠재적 Path Traversal: Paths.get에 사용자 입력 직접 전달"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-22"

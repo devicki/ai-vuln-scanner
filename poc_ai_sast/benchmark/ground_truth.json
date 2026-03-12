@@ -1,0 +1,26 @@
+{
+  "tests/sample_code/vulnerable/UserController.java": {
+    "expected_findings": [
+      {"line": 20, "type": "sql_injection", "verdict": "CONFIRMED"}
+    ]
+  },
+  "tests/sample_code/vulnerable/CommentController.java": {
+    "expected_findings": [
+      {"line": 16, "type": "xss", "verdict": "CONFIRMED"}
+    ]
+  },
+  "tests/sample_code/vulnerable/FileController.java": {
+    "expected_findings": [
+      {"line": 18, "type": "path_traversal", "verdict": "CONFIRMED"}
+    ]
+  },
+  "tests/sample_code/safe/SafeUserController.java": {
+    "expected_findings": []
+  },
+  "tests/sample_code/safe/SafeCommentController.java": {
+    "expected_findings": []
+  },
+  "tests/sample_code/safe/SafeFileController.java": {
+    "expected_findings": []
+  }
+}

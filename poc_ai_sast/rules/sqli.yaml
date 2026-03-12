@@ -1,0 +1,49 @@
+rules:
+  - id: java-sqli-string-concat
+    pattern-either:
+      - pattern: |
+          String $QUERY = $PREFIX + $INPUT + "...";
+          ...
+          $TEMPLATE.queryForList($QUERY, ...);
+      - pattern: |
+          String $QUERY = $PREFIX + $INPUT + "...";
+          ...
+          $TEMPLATE.query($QUERY, ...);
+      - pattern: |
+          String $QUERY = "..." + $INPUT + "...";
+          ...
+          $STMT.execute($QUERY);
+      - pattern: |
+          String $QUERY = $PREFIX + $INPUT;
+          ...
+          $TEMPLATE.queryForList($QUERY, ...);
+      - pattern: |
+          String $QUERY = $PREFIX + $INPUT;
+          ...
+          $TEMPLATE.query($QUERY, ...);
+    message: "잠재적 SQL Injection: 사용자 입력이 쿼리 문자열에 직접 연결됨 (CWE-89)"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021 - Injection"
+
+  - id: java-sqli-format-string
+    pattern: |
+      String $QUERY = String.format("...%s...", $INPUT);
+      ...
+      $OBJ.$METHOD($QUERY, ...);
+    message: "잠재적 SQL Injection: String.format으로 쿼리 조합"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-89"
+
+  - id: java-sqli-native-query
+    pattern: |
+      $EM.createNativeQuery("..." + $INPUT);
+    message: "잠재적 SQL Injection: Native Query에 사용자 입력 직접 삽입"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-89"

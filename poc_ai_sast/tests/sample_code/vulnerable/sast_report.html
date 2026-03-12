@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI SAST Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; color: #333; line-height: 1.6; }
+.container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
+.subtitle { color: #666; font-size: 0.9rem; margin-bottom: 25px; }
+
+/* Dashboard */
+.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 30px; }
+.stat-card { background: #fff; border-radius: 10px; padding: 18px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.stat-card .value { font-size: 2rem; font-weight: 700; }
+.stat-card .label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-card.confirmed .value { color: #e74c3c; }
+.stat-card.fp .value { color: #27ae60; }
+.stat-card.uncertain .value { color: #f39c12; }
+.stat-card.total .value { color: #3498db; }
+
+/* Chart */
+.chart-section { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.chart-section h2 { font-size: 1.1rem; margin-bottom: 15px; color: #1a1a2e; }
+.bar-chart { display: flex; flex-direction: column; gap: 10px; }
+.bar-row { display: flex; align-items: center; gap: 10px; }
+.bar-label { width: 120px; font-size: 0.85rem; text-align: right; color: #555; }
+.bar-track { flex: 1; background: #eee; border-radius: 6px; height: 24px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: 0.75rem; color: #fff; font-weight: 600; min-width: 30px; transition: width 0.3s; }
+.bar-fill.sqli { background: #e74c3c; }
+.bar-fill.xss { background: #e67e22; }
+.bar-fill.path { background: #9b59b6; }
+
+/* Metrics */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
+.metric-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.metric-card .metric-label { font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+.metric-card .metric-value { font-size: 1.4rem; font-weight: 700; color: #1a1a2e; }
+
+/* Findings */
+.findings-header { font-size: 1.2rem; margin-bottom: 15px; color: #1a1a2e; }
+.finding-card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid #ccc; }
+.finding-card.CONFIRMED { border-left-color: #e74c3c; }
+.finding-card.FALSE_POSITIVE { border-left-color: #27ae60; }
+.finding-card.UNCERTAIN { border-left-color: #f39c12; }
+
+.finding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.finding-title { font-weight: 600; font-size: 0.95rem; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; color: #fff; }
+.badge.CONFIRMED { background: #e74c3c; }
+.badge.FALSE_POSITIVE { background: #27ae60; }
+.badge.UNCERTAIN { background: #f39c12; }
+.badge.severity-ERROR { background: #c0392b; }
+.badge.severity-WARNING { background: #e67e22; }
+.badge.severity-INFO { background: #3498db; }
+
+.finding-meta { display: flex; gap: 15px; flex-wrap: wrap; font-size: 0.82rem; color: #666; margin-bottom: 12px; }
+.finding-meta span { display: flex; align-items: center; gap: 4px; }
+
+.code-block { background: #1e1e2e; color: #cdd6f4; padding: 14px; border-radius: 8px; font-family: "Fira Code", "Consolas", monospace; font-size: 0.82rem; overflow-x: auto; margin-bottom: 12px; white-space: pre; line-height: 1.5; }
+
+.confidence-bar-container { margin-bottom: 12px; }
+.confidence-label { font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+.confidence-track { background: #eee; border-radius: 6px; height: 10px; overflow: hidden; }
+.confidence-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #f39c12, #27ae60); }
+
+.reasoning { background: #f8f9fa; padding: 12px; border-radius: 8px; font-size: 0.85rem; color: #555; margin-bottom: 12px; }
+.reasoning strong { color: #333; }
+
+.taint-path { margin-bottom: 12px; }
+.taint-path h4 { font-size: 0.85rem; color: #555; margin-bottom: 6px; }
+.taint-path ol { padding-left: 20px; font-size: 0.82rem; color: #666; font-family: monospace; }
+.taint-path li { margin-bottom: 3px; }
+
+.fix-box { background: #eaf7ea; border: 1px solid #b7e4c7; border-radius: 8px; padding: 12px; font-size: 0.85rem; color: #2d6a4f; }
+.fix-box strong { color: #1b4332; }
+
+.footer { text-align: center; color: #aaa; font-size: 0.75rem; margin-top: 30px; padding: 15px 0; border-top: 1px solid #eee; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>AI SAST Analysis Report</h1>
+  <div class="subtitle">tests/sample_code/vulnerable &mdash; 2026-03-11T17:53:29.354006</div>
+
+  <!-- Dashboard -->
+  <div class="dashboard">
+    <div class="stat-card total">
+      <div class="value">3</div>
+      <div class="label">Semgrep Findings</div>
+    </div>
+    <div class="stat-card confirmed">
+      <div class="value">3</div>
+      <div class="label">Confirmed</div>
+    </div>
+    <div class="stat-card fp">
+      <div class="value">0</div>
+      <div class="label">False Positive</div>
+    </div>
+    <div class="stat-card uncertain">
+      <div class="value">0</div>
+      <div class="label">Uncertain</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">3</div>
+      <div class="label">Files Analyzed</div>
+    </div>
+  </div>
+
+  <!-- Vulnerability Type Distribution -->
+  <div class="chart-section">
+    <h2>Vulnerability Type Distribution</h2>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label">SQL Injection</span>
+        <div class="bar-track">
+          <div class="bar-fill sqli" style="width: 33.33333333333333%;">1</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">XSS</span>
+        <div class="bar-track">
+          <div class="bar-fill xss" style="width: 33.33333333333333%;">1</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">Path Traversal</span>
+        <div class="bar-track">
+          <div class="bar-fill path" style="width: 33.33333333333333%;">1</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Precision (Est.)</div>
+      <div class="metric-value">100.0%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Recall (Est.)</div>
+      <div class="metric-value">100.0%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">FP Reduction Rate</div>
+      <div class="metric-value">0.0%</div>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  <h2 class="findings-header">Findings (3)</h2>
+  
+  <div class="finding-card CONFIRMED">
+    <div class="finding-header">
+      <span class="finding-title">Xss &mdash; rules.java-xss-response-write</span>
+      <span>
+        <span class="badge CONFIRMED">CONFIRMED</span>
+        <span class="badge severity-ERROR">ERROR</span>
+      </span>
+    </div>
+
+    <div class="finding-meta">
+      <span>tests/sample_code/vulnerable/CommentController.java</span>
+      <span>Line 16</span>
+      <span>CWE-79</span>
+    </div>
+
+    <div class="code-block">requires login</div>
+
+    <div class="confidence-bar-container">
+      <div class="confidence-label">Confidence: 92%</div>
+      <div class="confidence-track">
+        <div class="confidence-fill" style="width: 92%;"></div>
+      </div>
+    </div>
+
+    
+    <div class="taint-path">
+      <h4>Taint Path:</h4>
+      <ol>
+        
+        <li>line 14: public void showComment(@RequestParam String comment, HttpServletResponse respon [SOURCE]</li>
+        
+        <li>line 16: writer.write("<div>" + comment + "</div>"); [SINK]</li>
+        
+      </ol>
+    </div>
+    
+
+    <div class="reasoning">
+      <strong>Analysis:</strong> 사용자 입력이 Sanitizer 없이 직접 xss 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.
+      <br><em>(LLM-assisted analysis)</em>
+    </div>
+
+    
+    <div class="fix-box">
+      <strong>Fix:</strong> HtmlUtils.htmlEscape() 또는 Thymeleaf th:text 사용하여 출력 이스케이프 처리
+    </div>
+    
+  </div>
+  
+  <div class="finding-card CONFIRMED">
+    <div class="finding-header">
+      <span class="finding-title">Path Traversal &mdash; rules.java-path-traversal-file-new</span>
+      <span>
+        <span class="badge CONFIRMED">CONFIRMED</span>
+        <span class="badge severity-ERROR">ERROR</span>
+      </span>
+    </div>
+
+    <div class="finding-meta">
+      <span>tests/sample_code/vulnerable/FileController.java</span>
+      <span>Line 18</span>
+      <span>CWE-22</span>
+    </div>
+
+    <div class="code-block">requires login</div>
+
+    <div class="confidence-bar-container">
+      <div class="confidence-label">Confidence: 92%</div>
+      <div class="confidence-track">
+        <div class="confidence-fill" style="width: 92%;"></div>
+      </div>
+    </div>
+
+    
+    <div class="taint-path">
+      <h4>Taint Path:</h4>
+      <ol>
+        
+        <li>line 17: public ResponseEntity<byte[]> getFile(@RequestParam String filename) throws IOEx [SOURCE]</li>
+        
+        <li>line 18: File file = new File(BASE_DIR + filename); [SINK]</li>
+        
+      </ol>
+    </div>
+    
+
+    <div class="reasoning">
+      <strong>Analysis:</strong> 사용자 입력이 Sanitizer 없이 직접 path traversal 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.
+      <br><em>(LLM-assisted analysis)</em>
+    </div>
+
+    
+    <div class="fix-box">
+      <strong>Fix:</strong> FilenameUtils.getName()으로 파일명만 추출 후 허용 경로(BASE_DIR) 내에 있는지 검증
+    </div>
+    
+  </div>
+  
+  <div class="finding-card CONFIRMED">
+    <div class="finding-header">
+      <span class="finding-title">Sql Injection &mdash; rules.java-sqli-string-concat</span>
+      <span>
+        <span class="badge CONFIRMED">CONFIRMED</span>
+        <span class="badge severity-ERROR">ERROR</span>
+      </span>
+    </div>
+
+    <div class="finding-meta">
+      <span>tests/sample_code/vulnerable/UserController.java</span>
+      <span>Line 20-21</span>
+      <span>CWE-89</span>
+    </div>
+
+    <div class="code-block">requires login</div>
+
+    <div class="confidence-bar-container">
+      <div class="confidence-label">Confidence: 92%</div>
+      <div class="confidence-track">
+        <div class="confidence-fill" style="width: 92%;"></div>
+      </div>
+    </div>
+
+    
+    <div class="taint-path">
+      <h4>Taint Path:</h4>
+      <ol>
+        
+        <li>line 19: String userId = request.getParameter("id"); [SOURCE]</li>
+        
+        <li>line 20: String query = "SELECT * FROM users WHERE id = '" + userId + "'"; [SINK]</li>
+        
+      </ol>
+    </div>
+    
+
+    <div class="reasoning">
+      <strong>Analysis:</strong> 사용자 입력이 Sanitizer 없이 직접 sql injection 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.
+      <br><em>(LLM-assisted analysis)</em>
+    </div>
+
+    
+    <div class="fix-box">
+      <strong>Fix:</strong> PreparedStatement 또는 JdbcTemplate 파라미터 바인딩 사용: jdbcTemplate.queryForList("SELECT * FROM users WHERE id = ?", userId)
+    </div>
+    
+  </div>
+  
+
+  
+
+  <div class="footer">
+    Generated by AI SAST POC &mdash; COONTEC AEZIZ
+  </div>
+</div>
+</body>
+</html>

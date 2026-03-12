@@ -1,0 +1,68 @@
+{
+  "source_dir": "tests/sample_code/safe",
+  "analyzed_at": "2026-03-11T17:53:34.392640",
+  "total_files": 3,
+  "semgrep_findings_count": 2,
+  "confirmed_count": 0,
+  "false_positive_count": 2,
+  "uncertain_count": 0,
+  "findings": [
+    {
+      "verdict": "FALSE_POSITIVE",
+      "confidence": 0.9,
+      "source_detected": true,
+      "sanitizer_detected": true,
+      "sanitizer_type": "HtmlUtils\\.htmlEscape\\s*\\(",
+      "taint_path": [
+        "line 15: public void showComment(@RequestParam String comment, HttpServletResponse respon [SOURCE]",
+        "line 17: String escaped = HtmlUtils.htmlEscape(comment);",
+        "line 18: writer.write(\"<div>\" + escaped + \"</div>\"); [SINK]"
+      ],
+      "reasoning": "코드에서 HtmlUtils\\.htmlEscape\\s*\\( Sanitizer가 감지되었습니다. xss 공격이 방지되어 있습니다.",
+      "llm_assisted": false,
+      "finding": {
+        "rule_id": "rules.java-xss-response-write",
+        "file_path": "tests/sample_code/safe/SafeCommentController.java",
+        "start_line": 18,
+        "end_line": 18,
+        "code_snippet": "requires login",
+        "message": "잠재적 XSS: 이스케이프 없이 사용자 입력을 응답에 직접 출력 (CWE-79)",
+        "severity": "ERROR",
+        "cwe": "CWE-79",
+        "vulnerability_type": "xss"
+      },
+      "fix_suggestion": "HtmlUtils.htmlEscape() 또는 Thymeleaf th:text 사용하여 출력 이스케이프 처리"
+    },
+    {
+      "verdict": "FALSE_POSITIVE",
+      "confidence": 0.9,
+      "source_detected": true,
+      "sanitizer_detected": true,
+      "sanitizer_type": "FilenameUtils\\.getName\\s*\\(",
+      "taint_path": [
+        "line 18: public ResponseEntity<byte[]> getFile(@RequestParam String filename) throws IOEx [SOURCE]",
+        "line 19: String safeFilename = FilenameUtils.getName(filename);",
+        "line 20: File file = new File(BASE_DIR + safeFilename); [SINK]"
+      ],
+      "reasoning": "코드에서 FilenameUtils\\.getName\\s*\\( Sanitizer가 감지되었습니다. path traversal 공격이 방지되어 있습니다.",
+      "llm_assisted": false,
+      "finding": {
+        "rule_id": "rules.java-path-traversal-file-new",
+        "file_path": "tests/sample_code/safe/SafeFileController.java",
+        "start_line": 20,
+        "end_line": 20,
+        "code_snippet": "requires login",
+        "message": "잠재적 Path Traversal: 사용자 입력으로 파일 경로 직접 구성 (CWE-22)",
+        "severity": "ERROR",
+        "cwe": "CWE-22",
+        "vulnerability_type": "path_traversal"
+      },
+      "fix_suggestion": "FilenameUtils.getName()으로 파일명만 추출 후 허용 경로(BASE_DIR) 내에 있는지 검증"
+    }
+  ],
+  "metrics": {
+    "precision_estimate": 0.0,
+    "recall_estimate": 0.0,
+    "fp_reduction_rate": 100.0
+  }
+}

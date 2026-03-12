@@ -1,0 +1,21 @@
+rules:
+  - id: java-xss-response-write
+    pattern: |
+      $WRITER.write($INPUT);
+    message: "잠재적 XSS: 이스케이프 없이 사용자 입력을 응답에 직접 출력 (CWE-79)"
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-79"
+      owasp: "A03:2021 - Injection"
+
+  - id: java-xss-model-attribute
+    patterns:
+      - pattern: |
+          $MODEL.addAttribute($KEY, $INPUT);
+          return $VIEW;
+    message: "잠재적 XSS: Thymeleaf/JSP 뷰에 검증 없는 사용자 입력 전달"
+    severity: WARNING
+    languages: [java]
+    metadata:
+      cwe: "CWE-79"

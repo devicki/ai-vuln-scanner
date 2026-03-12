@@ -1,0 +1,91 @@
+{
+  "source_dir": "tests/sample_code/vulnerable",
+  "analyzed_at": "2026-03-11T17:53:29.354006",
+  "total_files": 3,
+  "semgrep_findings_count": 3,
+  "confirmed_count": 3,
+  "false_positive_count": 0,
+  "uncertain_count": 0,
+  "findings": [
+    {
+      "verdict": "CONFIRMED",
+      "confidence": 0.92,
+      "source_detected": true,
+      "sanitizer_detected": false,
+      "sanitizer_type": null,
+      "taint_path": [
+        "line 14: public void showComment(@RequestParam String comment, HttpServletResponse respon [SOURCE]",
+        "line 16: writer.write(\"<div>\" + comment + \"</div>\"); [SINK]"
+      ],
+      "reasoning": "사용자 입력이 Sanitizer 없이 직접 xss 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.",
+      "llm_assisted": true,
+      "finding": {
+        "rule_id": "rules.java-xss-response-write",
+        "file_path": "tests/sample_code/vulnerable/CommentController.java",
+        "start_line": 16,
+        "end_line": 16,
+        "code_snippet": "requires login",
+        "message": "잠재적 XSS: 이스케이프 없이 사용자 입력을 응답에 직접 출력 (CWE-79)",
+        "severity": "ERROR",
+        "cwe": "CWE-79",
+        "vulnerability_type": "xss"
+      },
+      "fix_suggestion": "HtmlUtils.htmlEscape() 또는 Thymeleaf th:text 사용하여 출력 이스케이프 처리"
+    },
+    {
+      "verdict": "CONFIRMED",
+      "confidence": 0.92,
+      "source_detected": true,
+      "sanitizer_detected": false,
+      "sanitizer_type": null,
+      "taint_path": [
+        "line 17: public ResponseEntity<byte[]> getFile(@RequestParam String filename) throws IOEx [SOURCE]",
+        "line 18: File file = new File(BASE_DIR + filename); [SINK]"
+      ],
+      "reasoning": "사용자 입력이 Sanitizer 없이 직접 path traversal 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.",
+      "llm_assisted": true,
+      "finding": {
+        "rule_id": "rules.java-path-traversal-file-new",
+        "file_path": "tests/sample_code/vulnerable/FileController.java",
+        "start_line": 18,
+        "end_line": 18,
+        "code_snippet": "requires login",
+        "message": "잠재적 Path Traversal: 사용자 입력으로 파일 경로 직접 구성 (CWE-22)",
+        "severity": "ERROR",
+        "cwe": "CWE-22",
+        "vulnerability_type": "path_traversal"
+      },
+      "fix_suggestion": "FilenameUtils.getName()으로 파일명만 추출 후 허용 경로(BASE_DIR) 내에 있는지 검증"
+    },
+    {
+      "verdict": "CONFIRMED",
+      "confidence": 0.92,
+      "source_detected": true,
+      "sanitizer_detected": false,
+      "sanitizer_type": null,
+      "taint_path": [
+        "line 19: String userId = request.getParameter(\"id\"); [SOURCE]",
+        "line 20: String query = \"SELECT * FROM users WHERE id = '\" + userId + \"'\"; [SINK]"
+      ],
+      "reasoning": "사용자 입력이 Sanitizer 없이 직접 sql injection 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.",
+      "llm_assisted": true,
+      "finding": {
+        "rule_id": "rules.java-sqli-string-concat",
+        "file_path": "tests/sample_code/vulnerable/UserController.java",
+        "start_line": 20,
+        "end_line": 21,
+        "code_snippet": "requires login",
+        "message": "잠재적 SQL Injection: 사용자 입력이 쿼리 문자열에 직접 연결됨 (CWE-89)",
+        "severity": "ERROR",
+        "cwe": "CWE-89",
+        "vulnerability_type": "sql_injection"
+      },
+      "fix_suggestion": "PreparedStatement 또는 JdbcTemplate 파라미터 바인딩 사용: jdbcTemplate.queryForList(\"SELECT * FROM users WHERE id = ?\", userId)"
+    }
+  ],
+  "metrics": {
+    "precision_estimate": 1.0,
+    "recall_estimate": 1.0,
+    "fp_reduction_rate": 0.0
+  }
+}

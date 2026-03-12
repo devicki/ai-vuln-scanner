@@ -1,0 +1,27 @@
+{
+  "accuracy": 1.0,
+  "correct": 2,
+  "total": 2,
+  "results": [
+    {
+      "source_dir": "/home/dev/company/coontec/project/aeziz/aeziz_ai/poc_reachability/tests/sample_projects/reachable",
+      "dir_name": "reachable",
+      "cve_id": "CVE-2021-44228",
+      "expected": "Reachable",
+      "actual": "Reachable",
+      "correct": true,
+      "confidence": 0.7,
+      "elapsed_seconds": 0.001
+    },
+    {
+      "source_dir": "/home/dev/company/coontec/project/aeziz/aeziz_ai/poc_reachability/tests/sample_projects/unreachable",
+      "dir_name": "unreachable",
+      "cve_id": "CVE-2021-44228",
+      "expected": "Unreachable",
+      "actual": "Unreachable",
+      "correct": true,
+      "confidence": 0.95,
+      "elapsed_seconds": 0.0
+    }
+  ]
+}

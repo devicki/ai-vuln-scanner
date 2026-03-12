@@ -1,0 +1,60 @@
+java_spring:
+  sources:
+    - method: "getParameter"
+      class: "javax.servlet.http.HttpServletRequest"
+      description: "HTTP request parameter (untrusted)"
+    - annotation: "@RequestParam"
+      description: "Spring MVC request parameter binding"
+    - annotation: "@PathVariable"
+      description: "Spring MVC path variable"
+    - method: "getHeader"
+      class: "javax.servlet.http.HttpServletRequest"
+      description: "HTTP request header"
+    - method: "getBody"
+      class: "org.springframework.http.RequestEntity"
+      description: "HTTP request body"
+
+  sinks:
+    sql_injection:
+      - method: "query"
+        class: "org.springframework.jdbc.core.JdbcTemplate"
+      - method: "execute"
+        class: "java.sql.Statement"
+      - method: "createNativeQuery"
+        class: "javax.persistence.EntityManager"
+      - method: "update"
+        class: "org.springframework.jdbc.core.JdbcTemplate"
+    xss:
+      - method: "write"
+        class: "java.io.PrintWriter"
+      - method: "print"
+        class: "java.io.PrintWriter"
+      - return_annotation: "@ResponseBody"
+        description: "Direct string return in controller"
+    path_traversal:
+      - constructor: "java.io.File"
+      - method: "get"
+        class: "java.nio.file.Paths"
+      - constructor: "java.io.FileInputStream"
+      - method: "readAllBytes"
+        class: "java.nio.file.Files"
+
+  sanitizers:
+    sql_injection:
+      - method: "prepareStatement"
+        class: "java.sql.Connection"
+        description: "PreparedStatement prevents SQLi"
+      - class: "org.springframework.jdbc.core.PreparedStatementCreator"
+      - pattern: "\\?"
+        context: "query_string"
+        description: "Parameterized query placeholder"
+    xss:
+      - method: "htmlEscape"
+        class: "org.springframework.web.util.HtmlUtils"
+      - method: "escapeHtml4"
+        class: "org.apache.commons.text.StringEscapeUtils"
+    path_traversal:
+      - method: "getName"
+        class: "org.apache.commons.io.FilenameUtils"
+      - method: "normalize"
+        class: "java.nio.file.Path"

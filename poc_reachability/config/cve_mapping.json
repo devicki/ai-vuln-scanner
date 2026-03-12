@@ -1,0 +1,52 @@
+{
+  "CVE-2021-44228": {
+    "library": "log4j-core",
+    "affected_versions": ["2.0", "2.14.1"],
+    "vulnerable_class": "org.apache.logging.log4j.core.lookup.JndiLookup",
+    "vulnerable_method": "lookup",
+    "simple_class_name": "JndiLookup",
+    "severity": "CRITICAL",
+    "cvss": 10.0,
+    "description": "Log4Shell - JNDI injection via log message"
+  },
+  "CVE-2022-22965": {
+    "library": "spring-webmvc",
+    "affected_versions": ["5.3.0", "5.3.17"],
+    "vulnerable_class": "org.springframework.beans.MutablePropertyValues",
+    "vulnerable_method": "addPropertyValues",
+    "simple_class_name": "MutablePropertyValues",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "description": "Spring4Shell - RCE via data binding"
+  },
+  "CVE-2022-42889": {
+    "library": "commons-text",
+    "affected_versions": ["1.5", "1.9"],
+    "vulnerable_class": "org.apache.commons.text.StringSubstitutor",
+    "vulnerable_method": "replace",
+    "simple_class_name": "StringSubstitutor",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "description": "Text4Shell - interpolation RCE"
+  },
+  "CVE-2021-22096": {
+    "library": "spring-web",
+    "affected_versions": ["5.3.0", "5.3.12"],
+    "vulnerable_class": "org.springframework.web.util.UriUtils",
+    "vulnerable_method": "decode",
+    "simple_class_name": "UriUtils",
+    "severity": "MEDIUM",
+    "cvss": 4.3,
+    "description": "Spring Framework log injection"
+  },
+  "CVE-2022-22950": {
+    "library": "spring-expression",
+    "affected_versions": ["5.3.0", "5.3.16"],
+    "vulnerable_class": "org.springframework.expression.spel.standard.SpelExpressionParser",
+    "vulnerable_method": "parseExpression",
+    "simple_class_name": "SpelExpressionParser",
+    "severity": "HIGH",
+    "cvss": 6.5,
+    "description": "Spring Expression DoS"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "semgrep_standalone": {
+    "total_findings": 5,
+    "true_positive": 3,
+    "false_positive": 2,
+    "precision": 0.6,
+    "recall": 1.0
+  },
+  "llm_filtered": {
+    "confirmed": 3,
+    "false_positive": 2,
+    "uncertain": 0,
+    "true_positive": 3,
+    "false_positive_actual": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "fp_reduction_rate": 100.0
+  },
+  "timing": {
+    "total_seconds": 1.06,
+    "per_file_seconds": 0.18
+  },
+  "success_criteria": {
+    "precision_70": true,
+    "recall_75": true,
+    "fp_reduction_30": true,
+    "all_passed": true
+  }
+}
