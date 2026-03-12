@@ -83,7 +83,7 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
 <body>
 <div class="container">
   <h1>AI SAST Analysis Report</h1>
-  <div class="subtitle">tests/sample_code/vulnerable &mdash; 2026-03-12T16:30:19.339109</div>
+  <div class="subtitle">tests/sample_code/vulnerable &mdash; 2026-03-12T17:31:40.134467</div>
 
   <!-- Dashboard -->
   <div class="dashboard">
@@ -168,12 +168,12 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
       <span>CWE-79</span>
     </div>
 
-    <div class="code-block">requires login</div>
+    <div class="code-block">        writer.write(&#34;&lt;div&gt;&#34; + comment + &#34;&lt;/div&gt;&#34;);</div>
 
     <div class="confidence-bar-container">
-      <div class="confidence-label">Confidence: 92%</div>
+      <div class="confidence-label">Confidence: 80%</div>
       <div class="confidence-track">
-        <div class="confidence-fill" style="width: 92%;"></div>
+        <div class="confidence-fill" style="width: 80%;"></div>
       </div>
     </div>
 
@@ -191,8 +191,8 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
     
 
     <div class="reasoning">
-      <strong>Analysis:</strong> 사용자 입력이 Sanitizer 없이 직접 xss 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.
-      <br><em>(LLM-assisted analysis)</em>
+      <strong>Analysis:</strong> 사용자 입력(Source)이 Sanitizer 없이 xss Sink에 도달합니다.
+      
     </div>
 
     
@@ -217,12 +217,12 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
       <span>CWE-22</span>
     </div>
 
-    <div class="code-block">requires login</div>
+    <div class="code-block">        File file = new File(BASE_DIR + filename);</div>
 
     <div class="confidence-bar-container">
-      <div class="confidence-label">Confidence: 92%</div>
+      <div class="confidence-label">Confidence: 80%</div>
       <div class="confidence-track">
-        <div class="confidence-fill" style="width: 92%;"></div>
+        <div class="confidence-fill" style="width: 80%;"></div>
       </div>
     </div>
 
@@ -240,8 +240,8 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
     
 
     <div class="reasoning">
-      <strong>Analysis:</strong> 사용자 입력이 Sanitizer 없이 직접 path traversal 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.
-      <br><em>(LLM-assisted analysis)</em>
+      <strong>Analysis:</strong> 사용자 입력(Source)이 Sanitizer 없이 path traversal Sink에 도달합니다.
+      
     </div>
 
     
@@ -266,12 +266,13 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
       <span>CWE-89</span>
     </div>
 
-    <div class="code-block">requires login</div>
+    <div class="code-block">        String query = &#34;SELECT * FROM users WHERE id = &#39;&#34; + userId + &#34;&#39;&#34;;
+        List&lt;Map&lt;String, Object&gt;&gt; result = jdbcTemplate.queryForList(query);</div>
 
     <div class="confidence-bar-container">
-      <div class="confidence-label">Confidence: 92%</div>
+      <div class="confidence-label">Confidence: 80%</div>
       <div class="confidence-track">
-        <div class="confidence-fill" style="width: 92%;"></div>
+        <div class="confidence-fill" style="width: 80%;"></div>
       </div>
     </div>
 
@@ -289,8 +290,8 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
     
 
     <div class="reasoning">
-      <strong>Analysis:</strong> 사용자 입력이 Sanitizer 없이 직접 sql injection 취약점 Sink에 연결되어 있습니다. 실제 취약점으로 판정합니다.
-      <br><em>(LLM-assisted analysis)</em>
+      <strong>Analysis:</strong> 사용자 입력(Source)이 Sanitizer 없이 sql injection Sink에 도달합니다.
+      
     </div>
 
     

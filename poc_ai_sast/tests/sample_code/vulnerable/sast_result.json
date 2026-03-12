@@ -1,6 +1,6 @@
 {
   "source_dir": "tests/sample_code/vulnerable",
-  "analyzed_at": "2026-03-12T16:35:46.230148",
+  "analyzed_at": "2026-03-12T17:31:40.134467",
   "total_files": 3,
   "semgrep_findings_count": 3,
   "confirmed_count": 3,
@@ -9,7 +9,7 @@
   "findings": [
     {
       "verdict": "CONFIRMED",
-      "confidence": 0.9,
+      "confidence": 0.8,
       "source_detected": true,
       "sanitizer_detected": false,
       "sanitizer_type": null,
@@ -17,14 +17,14 @@
         "line 14: public void showComment(@RequestParam String comment, HttpServletResponse respon [SOURCE]",
         "line 16: writer.write(\"<div>\" + comment + \"</div>\"); [SINK]"
       ],
-      "reasoning": "이 코드는 사용자 입력을 응답에 직접 출력하고 있으며, 이스케이프 처리를 하지 않고 있습니다. 사용자 입력이 그대로 HTML로 출력될 수 있어 XSS 공격에 취약합니다. 또한, 이 코드에서는 사용자 입력을 받는 부분에서 검증 또는 이스케이프 처리가 이루어지지 않았음을 고려할 때, 이는 실제 취약점임이 확실합니다.",
-      "llm_assisted": true,
+      "reasoning": "사용자 입력(Source)이 Sanitizer 없이 xss Sink에 도달합니다.",
+      "llm_assisted": false,
       "finding": {
         "rule_id": "rules.java-xss-response-write",
         "file_path": "tests/sample_code/vulnerable/CommentController.java",
         "start_line": 16,
         "end_line": 16,
-        "code_snippet": "requires login",
+        "code_snippet": "        writer.write(\"<div>\" + comment + \"</div>\");",
         "message": "잠재적 XSS: 이스케이프 없이 사용자 입력을 응답에 직접 출력 (CWE-79)",
         "severity": "ERROR",
         "cwe": "CWE-79",
@@ -34,7 +34,7 @@
     },
     {
       "verdict": "CONFIRMED",
-      "confidence": 0.9,
+      "confidence": 0.8,
       "source_detected": true,
       "sanitizer_detected": false,
       "sanitizer_type": null,
@@ -42,14 +42,14 @@
         "line 17: public ResponseEntity<byte[]> getFile(@RequestParam String filename) throws IOEx [SOURCE]",
         "line 18: File file = new File(BASE_DIR + filename); [SINK]"
       ],
-      "reasoning": "이 코드는 사용자 입력인 filename을 그대로 파일 경로로 사용하여 파일을 읽고 있습니다. 사용자가 입력한 filename에 대한 검증이나 이스케이프 처리가 없기 때문에, 이는 명백한 Path Traversal 취약점입니다. 따라서 이 코드는 실제 취약점입니다.",
-      "llm_assisted": true,
+      "reasoning": "사용자 입력(Source)이 Sanitizer 없이 path traversal Sink에 도달합니다.",
+      "llm_assisted": false,
       "finding": {
         "rule_id": "rules.java-path-traversal-file-new",
         "file_path": "tests/sample_code/vulnerable/FileController.java",
         "start_line": 18,
         "end_line": 18,
-        "code_snippet": "requires login",
+        "code_snippet": "        File file = new File(BASE_DIR + filename);",
         "message": "잠재적 Path Traversal: 사용자 입력으로 파일 경로 직접 구성 (CWE-22)",
         "severity": "ERROR",
         "cwe": "CWE-22",
@@ -59,7 +59,7 @@
     },
     {
       "verdict": "CONFIRMED",
-      "confidence": 0.9,
+      "confidence": 0.8,
       "source_detected": true,
       "sanitizer_detected": false,
       "sanitizer_type": null,
@@ -67,14 +67,14 @@
         "line 19: String userId = request.getParameter(\"id\"); [SOURCE]",
         "line 20: String query = \"SELECT * FROM users WHERE id = '\" + userId + \"'\"; [SINK]"
       ],
-      "reasoning": "사용자 입력이 쿼리 문자열에 직접 연결되어 있고, 해당 코드에서는 사용자 입력이 검증되거나 이스케이프되는 부분이 없어 잠재적인 SQL 인젝션 공격에 취약합니다. 따라서 이는 실제 취약점입니다.",
-      "llm_assisted": true,
+      "reasoning": "사용자 입력(Source)이 Sanitizer 없이 sql injection Sink에 도달합니다.",
+      "llm_assisted": false,
       "finding": {
         "rule_id": "rules.java-sqli-string-concat",
         "file_path": "tests/sample_code/vulnerable/UserController.java",
         "start_line": 20,
         "end_line": 21,
-        "code_snippet": "requires login",
+        "code_snippet": "        String query = \"SELECT * FROM users WHERE id = '\" + userId + \"'\";\n        List<Map<String, Object>> result = jdbcTemplate.queryForList(query);",
         "message": "잠재적 SQL Injection: 사용자 입력이 쿼리 문자열에 직접 연결됨 (CWE-89)",
         "severity": "ERROR",
         "cwe": "CWE-89",

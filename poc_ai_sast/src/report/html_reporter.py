@@ -173,7 +173,7 @@ h1 { font-size: 1.8rem; margin-bottom: 5px; color: #1a1a2e; }
       {% if f.finding.cwe %}<span>{{ f.finding.cwe }}</span>{% endif %}
     </div>
 
-    <div class="code-block">{{ f.finding.code_snippet }}</div>
+    <div class="code-block">{{ f.finding.code_snippet | e }}</div>
 
     <div class="confidence-bar-container">
       <div class="confidence-label">Confidence: {{ "%.0f"|format(f.confidence * 100) }}%</div>
