@@ -37,6 +37,7 @@ ENV/
 # Environment variables
 .env.local
 .env.cfg.enc
+.env
 
 # Database
 *.db

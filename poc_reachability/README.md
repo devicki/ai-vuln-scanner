@@ -15,13 +15,13 @@ SBOM에 포함된 CVE 중 **실제 코드에서 호출되는 취약 함수**만 
 
 ## 지원 CVE
 
-| CVE ID | Library | 취약 메서드 | CVSS |
-|--------|---------|------------|------|
-| CVE-2021-44228 | log4j-core | JndiLookup.lookup | 10.0 |
-| CVE-2022-22965 | spring-webmvc | MutablePropertyValues.addPropertyValues | 9.8 |
-| CVE-2022-42889 | commons-text | StringSubstitutor.replace | 9.8 |
-| CVE-2021-22096 | spring-web | UriUtils.decode | 4.3 |
-| CVE-2022-22950 | spring-expression | SpelExpressionParser.parseExpression | 6.5 |
+| CVE ID         | Library           | 취약 메서드                             | CVSS |
+| -------------- | ----------------- | --------------------------------------- | ---- |
+| CVE-2021-44228 | log4j-core        | JndiLookup.lookup                       | 10.0 |
+| CVE-2022-22965 | spring-webmvc     | MutablePropertyValues.addPropertyValues | 9.8  |
+| CVE-2022-42889 | commons-text      | StringSubstitutor.replace               | 9.8  |
+| CVE-2021-22096 | spring-web        | UriUtils.decode                         | 4.3  |
+| CVE-2022-22950 | spring-expression | SpelExpressionParser.parseExpression    | 6.5  |
 
 ---
 
@@ -41,12 +41,12 @@ pip install --break-system-packages -r requirements.txt
 python3 main.py --source-dir tests/sample_projects/reachable --cve CVE-2021-44228
 
 # 전체 CVE 분석
-python3 main.py --source-dir /path/to/java/project --all-cves
+python3 main.py --source-dir tests/sample_projects/reachable --all-cves
 
 # LLM 보조 분석 (Ollama 필요)
 export LLM_BASE_URL=http://localhost:11434/v1
 export LLM_MODEL=codellama
-python3 main.py --source-dir /path/to/project --all-cves --use-llm
+python3 main.py --source-dir tests/sample_projects/reachable --all-cves --use-llm
 
 # JSON 출력
 python3 main.py --source-dir tests/sample_projects/reachable --json
@@ -122,4 +122,4 @@ Summary: {'reachable_count': 1, ...}
 
 ---
 
-*작성일: 2026-03-11 | COONTEC AEZIZ AI 기능 04*
+_작성일: 2026-03-11 | COONTEC AEZIZ AI 기능 04_

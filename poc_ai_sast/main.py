@@ -9,21 +9,30 @@ import time
 # Ensure project root is in sys.path
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
+from dotenv import load_dotenv
 
-from src.scanner.semgrep_runner import run_semgrep, check_semgrep_installed
-from src.taint.taint_analyzer import analyze_taint
-from src.report.reporter import generate_report, report_to_dict
+load_dotenv()
+
 from src.report.html_reporter import generate_html_report
+from src.report.reporter import generate_report, report_to_dict
+from src.scanner.semgrep_runner import check_semgrep_installed, run_semgrep
+from src.taint.taint_analyzer import analyze_taint
 
 
-def scan(source_dir: str, vuln_types: list = None, use_llm: bool = False,
-         use_mock: bool = True, html_report: bool = False):
+def scan(
+    source_dir: str,
+    vuln_types: list = None,
+    use_llm: bool = False,
+    use_mock: bool = True,
+    html_report: bool = False,
+):
     """Run the full SAST pipeline."""
     rules_dir = os.path.join(PROJECT_ROOT, "rules")
 
     try:
         from rich.console import Console
         from rich.table import Table
+
         console = Console()
         use_rich = True
     except ImportError:
@@ -40,8 +49,13 @@ def scan(source_dir: str, vuln_types: list = None, use_llm: bool = False,
     findings = run_semgrep(source_dir, rules_dir)
 
     if vuln_types:
-        type_map = {"sqli": "sql_injection", "xss": "xss", "path": "path_traversal",
-                     "sql_injection": "sql_injection", "path_traversal": "path_traversal"}
+        type_map = {
+            "sqli": "sql_injection",
+            "xss": "xss",
+            "path": "path_traversal",
+            "sql_injection": "sql_injection",
+            "path_traversal": "path_traversal",
+        }
         allowed = {type_map.get(t, t) for t in vuln_types}
         findings = [f for f in findings if f.vulnerability_type in allowed]
 
@@ -68,11 +82,15 @@ def scan(source_dir: str, vuln_types: list = None, use_llm: bool = False,
     for finding in findings:
         try:
             if os.path.isfile(finding.file_path):
-                with open(finding.file_path, "r", encoding="utf-8", errors="ignore") as fp:
+                with open(
+                    finding.file_path, "r", encoding="utf-8", errors="ignore"
+                ) as fp:
                     source_code = fp.read()
             else:
                 source_code = finding.code_snippet
-            result = analyze_taint(finding, source_code, use_llm=use_llm, use_mock=use_mock)
+            result = analyze_taint(
+                finding, source_code, use_llm=use_llm, use_mock=use_mock
+            )
             taint_results.append(result)
         except Exception as e:
             error_files.append(finding.file_path)
@@ -119,9 +137,17 @@ def scan(source_dir: str, vuln_types: list = None, use_llm: bool = False,
     print()
 
     for r in taint_results:
-        verdict_mark = {"CONFIRMED": "🔴", "FALSE_POSITIVE": "🟢", "UNCERTAIN": "🟡"}.get(r.verdict, "⚪")
-        print(f"  {verdict_mark} [{r.verdict}] {r.finding.file_path}:{r.finding.start_line}")
-        print(f"     {r.finding.vulnerability_type.replace('_', ' ').upper()} | confidence={r.confidence}")
+        verdict_mark = {
+            "CONFIRMED": "🔴",
+            "FALSE_POSITIVE": "🟢",
+            "UNCERTAIN": "🟡",
+        }.get(r.verdict, "⚪")
+        print(
+            f"  {verdict_mark} [{r.verdict}] {r.finding.file_path}:{r.finding.start_line}"
+        )
+        print(
+            f"     {r.finding.vulnerability_type.replace('_', ' ').upper()} | confidence={r.confidence}"
+        )
         print(f"     {r.reasoning[:100]}")
         if r.fix_suggestion:
             print(f"     Fix: {r.fix_suggestion[:100]}")
@@ -161,6 +187,7 @@ def scan(source_dir: str, vuln_types: list = None, use_llm: bool = False,
 def serve(port: int = 8001):
     """Start the FastAPI server."""
     import uvicorn
+
     print(f"Starting AI SAST API server on port {port}...")
     uvicorn.run("src.api.server:app", host="0.0.0.0", port=port, reload=False)
 
@@ -168,6 +195,7 @@ def serve(port: int = 8001):
 def benchmark():
     """Run the accuracy benchmark."""
     from benchmark.run_benchmark import run_benchmark
+
     run_benchmark()
 
 
@@ -183,10 +211,13 @@ Examples:
   python main.py --source-dir tests/sample_code/ --types sqli xss
   python main.py --benchmark
   python main.py --serve --port 8001
-""")
+""",
+    )
 
     parser.add_argument("--source-dir", type=str, help="Java 소스코드 디렉토리 경로")
-    parser.add_argument("--types", nargs="+", help="탐지할 취약점 유형 (sqli, xss, path)")
+    parser.add_argument(
+        "--types", nargs="+", help="탐지할 취약점 유형 (sqli, xss, path)"
+    )
     parser.add_argument("--use-llm", action="store_true", help="실제 LLM API 사용")
     parser.add_argument("--html-report", action="store_true", help="HTML 리포트 생성")
     parser.add_argument("--benchmark", action="store_true", help="정확도 벤치마크 실행")

@@ -65,29 +65,39 @@ class LLMAssistant:
     ) -> LLMReachabilityResult:
         import httpx
 
-        prompt = f"""당신은 Java 소스코드 보안 분석 전문가입니다.
-다음 코드를 분석하여 취약 메서드에 도달 가능한지 판단하세요.
+        prompt = f"""You are a Java source code security analysis expert.
+Analyze the following code and determine if the vulnerable method is reachable.
 
-분석 대상 코드:
+Source code:
 {code_snippet}
 
-엔트리포인트: {entry_point}
-취약 메서드: {vulnerable_method}
-현재까지 발견된 호출 체인: {call_chain_so_far}
+Entry point: {entry_point}
+Vulnerable method: {vulnerable_method}
+Call chain so far: {call_chain_so_far}
 
-리플렉션(Class.forName, Method.invoke), 동적 프록시, Spring AOP 사용 여부를 확인하고,
-취약 메서드에 도달 가능한지 JSON으로 반환하세요:
-{{"verdict": "Reachable|Unreachable|Conditional", "confidence": 0.0~1.0, "reasoning": "근거"}}"""
+Check for reflection (Class.forName, Method.invoke), dynamic proxy, Spring AOP usage.
+Determine if the vulnerable method is reachable from the entry point.
+
+IMPORTANT: You MUST respond with ONLY a single JSON object. No explanation, no markdown, no extra text.
+Output format:
+{{"verdict": "Reachable", "confidence": 0.9, "reasoning": "reason here"}}
+
+verdict must be exactly one of: Reachable, Unreachable, Conditional
+confidence must be a float between 0.0 and 1.0"""
+
+        url = f"{self.base_url}/chat/completions"
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        logger.info(f"[LLM >>>] POST {url}")
+        logger.info(f"[LLM >>>] model={self.model}")
+        logger.info(f"[LLM >>>] prompt=\n{prompt}")
 
         try:
-            resp = httpx.post(
-                f"{self.base_url}/chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=30.0,
-            )
+            resp = httpx.post(url, json=payload, timeout=120.0)
+            logger.info(f"[LLM <<<] status={resp.status_code}")
+            logger.info(f"[LLM <<<] body={resp.text}")
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
             # Extract JSON from response
@@ -101,6 +111,6 @@ class LLMAssistant:
                     reasoning=result["reasoning"],
                 )
         except Exception as e:
-            logger.warning(f"LLM call failed: {e}, falling back to mock")
+            logger.warning(f"[LLM !!!] call failed: {e}, falling back to mock")
 
         return self._mock_analyze(code_snippet)

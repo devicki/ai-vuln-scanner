@@ -8,6 +8,7 @@ from typing import List, Literal, Optional
 import networkx as nx
 
 from src.parser.java_ast_parser import FileAST, parse_directory
+from src.parser.pom_parser import find_dependencies, is_version_affected
 from src.graph.call_graph import build_call_graph, find_paths_to_target, get_entry_points
 from src.cve.cve_mapper import load_cve_mapping, get_all_cve_ids, get_vulnerable_method
 from src.llm.llm_assistant import LLMAssistant
@@ -119,19 +120,30 @@ def analyze(
     total_files = len(file_asts)
     total_methods = sum(len(fa.methods) for fa in file_asts)
     logger.info(f"Parsed {total_files} files, {total_methods} methods")
+    if total_files == 0:
+        logger.warning(f"[!] '{source_dir}' 에서 .java 파일을 찾지 못했습니다. 경로를 확인하세요.")
 
-    # 2. Build base call graph
+    # 2. Parse build files (pom.xml / build.gradle) for dependency versions
+    dependencies = find_dependencies(source_dir)
+    dep_index = {(d.group_id, d.artifact_id): d for d in dependencies}
+    if dependencies:
+        logger.info(f"의존성 {len(dependencies)}개 발견: {[str(d) for d in dependencies]}")
+    else:
+        logger.warning("pom.xml / build.gradle 없음 → import 기반 fallback 사용")
+
+    # 3. Build base call graph
     graph = build_call_graph(file_asts)
 
-    # 3. Detect entry points
+    # 4. Detect entry points
     entry_points = get_entry_points(graph, file_asts)
+    logger.info(f"Entry points ({len(entry_points)}): {entry_points[:5]}")
 
-    # 4. Load CVE mapping
+    # 5. Load CVE mapping
     mapping = load_cve_mapping()
     if not cve_ids:
         cve_ids = get_all_cve_ids(mapping)
 
-    # 5. LLM assistant
+    # 6. LLM assistant
     llm = LLMAssistant(use_mock=not use_llm)
 
     # 6. Analyze each CVE
@@ -142,73 +154,161 @@ def analyze(
             logger.warning(f"Unknown CVE: {cve_id}")
             continue
 
+        # 의존성 버전 체크 (pom.xml / build.gradle 기반)
+        group_id = cve_info.get("group_id", "")
+        artifact_id = cve_info.get("artifact_id", "")
+        dep = dep_index.get((group_id, artifact_id))
+
+        if dependencies:
+            # 빌드 파일이 있으면 의존성 기반으로 판단
+            if dep is None:
+                logger.info(f"[{cve_id}] {artifact_id} 의존성 없음 → Unreachable 확정")
+                results.append(CVEReachabilityResult(
+                    cve_id=cve_id,
+                    library=cve_info["library"],
+                    cvss=cve_info["cvss"],
+                    verdict="Unreachable",
+                    confidence=0.97,
+                    reasoning=f"빌드 파일에 {artifact_id} 의존성이 없습니다.",
+                ))
+                continue
+
+            affected_versions = cve_info.get("affected_versions", [])
+            if dep.version and len(affected_versions) == 2:
+                affected = is_version_affected(dep.version, affected_versions[0], affected_versions[1])
+                if affected is False:
+                    logger.info(f"[{cve_id}] {artifact_id}:{dep.version} 는 영향받는 버전 범위 밖 → Unreachable")
+                    results.append(CVEReachabilityResult(
+                        cve_id=cve_id,
+                        library=cve_info["library"],
+                        cvss=cve_info["cvss"],
+                        verdict="Unreachable",
+                        confidence=0.92,
+                        reasoning=(
+                            f"{artifact_id} 버전 {dep.version}은 "
+                            f"영향받는 버전 범위({affected_versions[0]} ~ {affected_versions[1]})에 해당하지 않습니다."
+                        ),
+                    ))
+                    continue
+                elif affected is True:
+                    logger.info(f"[{cve_id}] {artifact_id}:{dep.version} 영향받는 버전 범위 내 → 정적 분석 진행")
+                else:
+                    logger.info(f"[{cve_id}] {artifact_id}:{dep.version} 버전 비교 불가 → 정적 분석 진행")
+            else:
+                logger.info(f"[{cve_id}] {artifact_id} 버전 정보 없음 → 정적 분석 진행")
+        else:
+            # 빌드 파일 없으면 기존 import 기반 fallback
+            has_import_fallback = _check_imports_vulnerable_lib(file_asts, cve_info)
+            if not has_import_fallback:
+                logger.info(f"[{cve_id}] import 없음(빌드파일 없음) → Unreachable 확정")
+                results.append(CVEReachabilityResult(
+                    cve_id=cve_id,
+                    library=cve_info["library"],
+                    cvss=cve_info["cvss"],
+                    verdict="Unreachable",
+                    confidence=0.80,
+                    reasoning=f"빌드 파일 없음. 소스코드 import에서 {cve_info['library']} 미발견.",
+                ))
+                continue
+
         # Add target node and edges to graph
         target_node = _add_cve_targets(graph, file_asts, cve_info)
 
         # BFS path search
         paths = find_paths_to_target(graph, entry_points, target_node)
 
-        has_import = _check_imports_vulnerable_lib(file_asts, cve_info)
         has_reflection = _has_reflection(file_asts)
+
+        code_snippet = _get_all_source_code(file_asts)
+        ep = entry_points[0] if entry_points else "unknown"
+        logger.info(f"[{cve_id}] code_snippet length={len(code_snippet)}, entry_point={ep}")
 
         if paths:
             best_path = min(paths, key=len)
             depth = len(best_path)
             confidence = 0.90 if depth <= 2 else 0.70
+            static_reasoning = (
+                f"엔트리포인트 {best_path[0]}에서 "
+                f"{' -> '.join(best_path[1:])}를 거쳐 "
+                f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}에 "
+                f"{'직접' if depth <= 2 else str(depth-1) + '단계를 거쳐'} 도달하는 경로가 존재합니다."
+            )
+            if use_llm:
+                llm_result = llm.analyze_reachability(
+                    code_snippet=code_snippet[:3000],
+                    entry_point=ep,
+                    vulnerable_method=f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}",
+                    call_chain_so_far=best_path,
+                )
+                verdict = llm_result.verdict
+                confidence = llm_result.confidence
+                reasoning = f"[정적분석] {static_reasoning} / [LLM] {llm_result.reasoning}"
+            else:
+                verdict = "Reachable"
+                reasoning = static_reasoning
             result = CVEReachabilityResult(
                 cve_id=cve_id,
                 library=cve_info["library"],
                 cvss=cve_info["cvss"],
-                verdict="Reachable",
+                verdict=verdict,
                 confidence=confidence,
                 call_path=best_path,
                 entry_point=best_path[0] if best_path else None,
-                reasoning=(
-                    f"엔트리포인트 {best_path[0]}에서 "
-                    f"{' -> '.join(best_path[1:])}를 거쳐 "
-                    f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}에 "
-                    f"{'직접' if depth <= 2 else str(depth-1) + '단계를 거쳐'} 도달하는 경로가 존재합니다."
-                ),
+                reasoning=reasoning,
             )
         elif has_reflection:
-            # LLM assist for conditional case
-            code_snippet = _get_all_source_code(file_asts)
-            ep = entry_points[0] if entry_points else "unknown"
-            llm_result = llm.analyze_reachability(
-                code_snippet=code_snippet[:3000],
-                entry_point=ep,
-                vulnerable_method=f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}",
-                call_chain_so_far=[],
-            )
+            if use_llm:
+                llm_result = llm.analyze_reachability(
+                    code_snippet=code_snippet[:3000],
+                    entry_point=ep,
+                    vulnerable_method=f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}",
+                    call_chain_so_far=[],
+                )
+                verdict = llm_result.verdict
+                confidence = llm_result.confidence
+                reasoning = f"리플렉션 패턴 감지. LLM 분석: {llm_result.reasoning}"
+            else:
+                verdict = "Conditional"
+                confidence = 0.4
+                reasoning = "리플렉션 패턴 감지 - 동적 호출 가능성 있음"
             result = CVEReachabilityResult(
                 cve_id=cve_id,
                 library=cve_info["library"],
                 cvss=cve_info["cvss"],
-                verdict="Conditional",
-                confidence=0.4,
-                reasoning=f"리플렉션 패턴 감지. LLM 분석: {llm_result.reasoning}",
-            )
-        elif not has_import:
-            result = CVEReachabilityResult(
-                cve_id=cve_id,
-                library=cve_info["library"],
-                cvss=cve_info["cvss"],
-                verdict="Unreachable",
-                confidence=0.95,
-                reasoning=f"취약 라이브러리 {cve_info['library']}의 임포트가 소스코드에 없습니다.",
+                verdict=verdict,
+                confidence=confidence,
+                reasoning=reasoning,
             )
         else:
-            result = CVEReachabilityResult(
-                cve_id=cve_id,
-                library=cve_info["library"],
-                cvss=cve_info["cvss"],
-                verdict="Unreachable",
-                confidence=0.75,
-                reasoning=(
+            # import는 있으나 정적 경로 없음 → LLM으로 보완 분석
+            if use_llm:
+                imports_info = ", ".join(
+                    imp for fa in file_asts for imp in fa.imports
+                )
+                llm_result = llm.analyze_reachability(
+                    code_snippet=code_snippet[:3000],
+                    entry_point=ep,
+                    vulnerable_method=f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}",
+                    call_chain_so_far=[],
+                )
+                reasoning = f"정적 경로 없음(임포트 존재). LLM 분석: {llm_result.reasoning}"
+                verdict = llm_result.verdict
+                confidence = llm_result.confidence
+            else:
+                verdict = "Unreachable"
+                confidence = 0.75
+                reasoning = (
                     f"취약 라이브러리 {cve_info['library']}가 임포트되어 있으나 "
                     f"{cve_info['simple_class_name']}.{cve_info['vulnerable_method']}까지 "
                     "도달하는 호출 경로가 없습니다."
-                ),
+                )
+            result = CVEReachabilityResult(
+                cve_id=cve_id,
+                library=cve_info["library"],
+                cvss=cve_info["cvss"],
+                verdict=verdict,
+                confidence=confidence,
+                reasoning=reasoning,
             )
 
         logger.info(f"{cve_id}: {result.verdict} (confidence={result.confidence:.2f})")
